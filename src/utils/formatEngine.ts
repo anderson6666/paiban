@@ -139,47 +139,65 @@ export function boldKeywordsMd(md: string): string {
 }
 
 /**
- * LaTeX 标记（HTML）
+ * 自动处理 LaTeX 标记：将 【type:内容】 或 【内容】 转换为对应 HTML
+ * 支持类型：color / border / underline / box（默认 color）
+ */
+function processLatexMarkers(text: string, opts: FormatOptions): string {
+  return text.replace(/【([^】]+)】/g, (_match, inner: string) => {
+    // 解析 type:content 格式
+    const colonIdx = inner.indexOf(':');
+    let type: LatexType = 'color';
+    let content: string;
+    if (colonIdx > 0) {
+      const prefix = inner.slice(0, colonIdx);
+      const rest = inner.slice(colonIdx + 1);
+      if (['color', 'border', 'underline', 'box'].includes(prefix)) {
+        type = prefix as LatexType;
+        content = rest;
+      } else {
+        content = inner;
+      }
+    } else {
+      content = inner;
+    }
+
+    switch (type) {
+      case 'color':
+        return `<span style="color:${opts.latexColor}">${content}</span>`;
+      case 'border':
+        return `<span style="background:${opts.latexBgColor};border:1px solid ${opts.latexBorderColor};padding:2px 6px;border-radius:3px">${content}</span>`;
+      case 'underline':
+        return `<span style="text-decoration:underline;text-decoration-color:${opts.latexColor};text-decoration-thickness:2px">${content}</span>`;
+      case 'box':
+        return `<span style="border:2px solid ${opts.latexBorderColor};padding:2px 8px;border-radius:6px">${content}</span>`;
+    }
+  });
+}
+
+/**
+ * 对选中文本应用 LaTeX 标记（HTML）
  */
 export function applyLatexMarkHtml(html: string, type: LatexType, opts: FormatOptions): string {
-  // 仅对选中文本调用，此处实现全量替换「【】」包裹的内容
-  const placeholder = html;
-  switch (type) {
-    case 'color':
-      return placeholder.replace(/【([^】]+)】/g,
-        `<span style="color:${opts.latexColor}">$1</span>`);
-    case 'border':
-      return placeholder.replace(/【([^】]+)】/g,
-        `<span style="background:${opts.latexBgColor};border:1px solid ${opts.latexBorderColor};padding:2px 6px;border-radius:3px">$1</span>`);
-    case 'underline':
-      return placeholder.replace(/【([^】]+)】/g,
-        `<span style="text-decoration:underline;text-decoration-color:${opts.latexColor};text-decoration-thickness:2px">$1</span>`);
-    case 'box':
-      return placeholder.replace(/【([^】]+)】/g,
-        `<span style="border:2px solid ${opts.latexBorderColor};padding:2px 8px;border-radius:6px">$1</span>`);
-  }
+  return html.replace(/【([^】]+)】/g, (_match, inner: string) => {
+    switch (type) {
+      case 'color':
+        return `<span style="color:${opts.latexColor}">${inner}</span>`;
+      case 'border':
+        return `<span style="background:${opts.latexBgColor};border:1px solid ${opts.latexBorderColor};padding:2px 6px;border-radius:3px">${inner}</span>`;
+      case 'underline':
+        return `<span style="text-decoration:underline;text-decoration-color:${opts.latexColor};text-decoration-thickness:2px">${inner}</span>`;
+      case 'box':
+        return `<span style="border:2px solid ${opts.latexBorderColor};padding:2px 8px;border-radius:6px">${inner}</span>`;
+    }
+  });
 }
 
 /**
  * LaTeX 标记（Markdown）
  * 知乎 markdown 模式不支持自定义样式，输出 HTML 标签
  */
-export function applyLatexMarkMd(md: string, type: LatexType, opts: FormatOptions): string {
-  return applyLatexMarkHtml(md, type, opts);
-}
-
-/**
- * 对选中文本应用 LaTeX 标记（即时操作）
- */
-export function wrapSelectionWithLatex(text: string, selection: { start: number; end: number }, type: LatexType, opts: FormatOptions): { text: string; html: string } {
-  const selected = text.slice(selection.start, selection.end);
-  if (!selected) return { text, html: '' };
-
-  const html = applyLatexMarkHtml(`【${escapeHtml(selected)}】`, type, opts);
-  // 移除外层 【】，仅保留 span
-  const innerHtml = html.replace(/【/, '').replace(/】/, '');
-  const newText = text.slice(0, selection.start) + selected + text.slice(selection.end);
-  return { text: newText, html: innerHtml };
+function applyLatexMarkMd(md: string, opts: FormatOptions): string {
+  return processLatexMarkers(md, opts);
 }
 
 /**
@@ -332,6 +350,10 @@ function processInline(text: string, opts: FormatOptions): { html: string; md: s
   // HTML 输出
   let html = escapeHtml(work);
   let md = work;
+
+  // LaTeX 标记自动处理：将 【type:内容】 或 【内容】 转换为样式 HTML
+  html = processLatexMarkers(html, opts);
+  md = applyLatexMarkMd(md, opts);
 
   // 关键词加粗
   if (opts.boldKeywords) {

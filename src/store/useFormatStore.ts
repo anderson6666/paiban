@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { formatAll, FormatOptions, DEFAULT_OPTIONS, LatexType, buildLatexHtml } from '@/utils/formatEngine';
+import { formatAll, FormatOptions, DEFAULT_OPTIONS, LatexType } from '@/utils/formatEngine';
 
 interface FormatState {
   input: string;
@@ -60,11 +60,11 @@ export const useFormatStore = create<FormatState>((set, get) => ({
     const selected = input.slice(selection.start, selection.end);
     const after = input.slice(selection.end);
 
-    // 在选中文本两侧插入 LaTeX 占位符 【】
-    const newInput = before + `【${selected}】` + after;
+    // 插入带类型前缀的标记，排版时自动识别转换
+    const newInput = before + `【${type}:${selected}】` + after;
     set({ input: newInput });
 
-    // 重新排版
+    // 即时排版预览
     const { html, markdown } = formatAll(newInput, options);
     set({ outputHtml: html, outputMarkdown: markdown, toast: { message: '已应用 LaTeX 标记', type: 'success' } });
   },
