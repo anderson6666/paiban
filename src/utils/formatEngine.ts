@@ -4,6 +4,12 @@
 // 规则：标题识别 / Top500 关键词加粗 / 短句换行 / LaTeX 标记
 
 import { SORTED_KEYWORDS, EXCLUDE_WORDS } from '@/data/keywords';
+import {
+  LATEX_COLOR_SORTED,
+  LATEX_BORDER_SORTED,
+  LATEX_UNDERLINE_SORTED,
+  LATEX_BOX_SORTED,
+} from '@/data/latexKeywords';
 
 export type LatexType = 'color' | 'border' | 'underline' | 'box';
 
@@ -11,6 +17,7 @@ export interface FormatOptions {
   boldKeywords: boolean;       // 关键词加粗
   breakSentences: boolean;     // 短句换行
   formatHeadings: boolean;     // 标题识别
+  autoLatex: boolean;          // 自动 LaTeX 标记
   latexColor: string;          // 变色色值
   latexBgColor: string;        // 边框底色
   latexBorderColor: string;    // 边框/框住色
@@ -20,6 +27,7 @@ export const DEFAULT_OPTIONS: FormatOptions = {
   boldKeywords: true,
   breakSentences: true,
   formatHeadings: true,
+  autoLatex: true,
   latexColor: '#FF9600',
   latexBgColor: '#FFF3E0',
   latexBorderColor: '#FF9600',
@@ -201,6 +209,62 @@ function applyLatexMarkMd(md: string, opts: FormatOptions): string {
 }
 
 /**
+ * 自动 LaTeX 标记：根据关键词库匹配并应用对应样式
+ * 按 box > border > underline > color 的优先级，避免短词覆盖长词
+ */
+function autoLatexMarkers(html: string, opts: FormatOptions): string {
+  if (!opts.autoLatex) return html;
+
+  let result = html;
+
+  // 保护已有的 HTML 标签内容不被替换
+  const protectedTags: string[] = [];
+  result = result.replace(/(<[^>]+>)/g, (match) => {
+    protectedTags.push(match);
+    return `\u0000TAG${protectedTags.length - 1}\u0000`;
+  });
+
+  // 框住（蓝色边框）— 最高优先级
+  for (const kw of LATEX_BOX_SORTED) {
+    const re = new RegExp(escapeRegExp(kw), 'g');
+    result = result.replace(re, `\u0000BOX${kw}\u0000`);
+  }
+
+  // 边框底色
+  for (const kw of LATEX_BORDER_SORTED) {
+    const re = new RegExp(escapeRegExp(kw), 'g');
+    result = result.replace(re, `\u0000BORDER${kw}\u0000`);
+  }
+
+  // 下划线
+  for (const kw of LATEX_UNDERLINE_SORTED) {
+    const re = new RegExp(escapeRegExp(kw), 'g');
+    result = result.replace(re, `\u0000UNDERLINE${kw}\u0000`);
+  }
+
+  // 变色（橙色高亮）— 最低优先级
+  for (const kw of LATEX_COLOR_SORTED) {
+    const re = new RegExp(escapeRegExp(kw), 'g');
+    result = result.replace(re, `\u0000COLOR${kw}\u0000`);
+  }
+
+  // 将占位符替换为实际样式
+  result = result.replace(/\u0000BOX(.+?)\u0000/g,
+    `<span style="border:2px solid ${opts.latexBorderColor};padding:2px 8px;border-radius:6px">$1</span>`);
+  result = result.replace(/\u0000BORDER(.+?)\u0000/g,
+    `<span style="background:${opts.latexBgColor};border:1px solid ${opts.latexBorderColor};padding:2px 6px;border-radius:3px">$1</span>`);
+  result = result.replace(/\u0000UNDERLINE(.+?)\u0000/g,
+    `<span style="text-decoration:underline;text-decoration-color:${opts.latexColor};text-decoration-thickness:2px">$1</span>`);
+  result = result.replace(/\u0000COLOR(.+?)\u0000/g,
+    `<span style="color:${opts.latexColor}">$1</span>`);
+
+  // 恢复被保护的 HTML 标签
+  result = result.replace(/\u0000TAG(\d+)\u0000/g, (_, i) => protectedTags[+i] || '');
+
+  return result;
+}
+
+/**
  * 主格式化函数
  */
 export function formatAll(input: string, opts: FormatOptions): { html: string; markdown: string } {
@@ -354,6 +418,9 @@ function processInline(text: string, opts: FormatOptions): { html: string; md: s
   // LaTeX 标记自动处理：将 【type:内容】 或 【内容】 转换为样式 HTML
   html = processLatexMarkers(html, opts);
   md = applyLatexMarkMd(md, opts);
+
+  // 自动 LaTeX 关键词匹配：根据词库自动应用样式
+  html = autoLatexMarkers(html, opts);
 
   // 关键词加粗
   if (opts.boldKeywords) {

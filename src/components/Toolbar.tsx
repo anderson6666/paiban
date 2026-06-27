@@ -1,6 +1,6 @@
 import { useFormatStore } from '@/store/useFormatStore';
 import { LatexType } from '@/utils/formatEngine';
-import { Wand2, Bold, Brackets, Minus, Square, Type as TypeIcon, Heading1, ListTree } from 'lucide-react';
+import { Wand2, Bold, Brackets, Minus, Square, Type as TypeIcon, Heading1, ListTree, Sparkles } from 'lucide-react';
 
 interface LatexBtn {
   type: LatexType;
@@ -87,6 +87,13 @@ export function Toolbar() {
           onClick={() => toggleOption('breakSentences')}
           icon={<ListTree size={14} />}
           label="短句换行"
+          disabled={!hasContent}
+        />
+        <RuleToggle
+          active={options.autoLatex}
+          onClick={() => toggleOption('autoLatex')}
+          icon={<Sparkles size={14} />}
+          label="自动LaTeX"
           disabled={!hasContent}
         />
       </div>
